@@ -1,0 +1,86 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "privacy-pools-relayer.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "privacy-pools-relayer.labels" . | nindent 4 }}
+{{- if .Values.annotations }}
+  annotations:
+    {{- .Values.annotations | toYaml | nindent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: {{ .Values.strategy }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: relayer
+      app.kubernetes.io/instance: {{ include "privacy-pools-relayer.name" . }}
+      app.kubernetes.io/name: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: relayer
+        app.kubernetes.io/instance: {{ include "privacy-pools-relayer.name" . }}
+        app.kubernetes.io/name: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: relayer
+        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: [ start ]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop:
+            - ALL
+        resources: {{- toYaml .Values.resources.relayer | nindent 10 }}
+        env:
+          - name: PORT
+            value: "{{ .Values.config.port }}"
+          - name: CHAIN_ID
+            value: "{{ .Values.config.chain_id }}"
+          - name: RPC_URL
+            value: "{{ .Values.config.rpc_url }}"
+          - name: REWARD_ADDRESS
+            value: "{{ .Values.config.reward_address }}"
+          - name: CONFIRMATIONS
+            value: "{{ .Values.config.confirmations }}"
+          - name: MAX_GAS_PRICE
+            value: "{{ .Values.config.max_gas_price }}"
+          - name: TRANSFER_SERVICE_FEE
+            value: "{{ .Values.config.transfer_service_fee }}"
+          - name: WITHDRAWAL_SERVICE_FEE
+            value: "{{ .Values.config.withdrawal_service_fee }}"
+        envFrom:
+          - secretRef:
+              {{- if .Values.config.secretReferenceKey }}
+              name: {{ .Values.config.secretReferenceKey }}
+              {{- else }}
+              name: {{ include "privacy-pools-relayer.fullname" . }}
+              {{- end }}
+          - secretRef:
+              name: {{ include "privacy-pools-relayer.redis-secret" . }}
+        volumeMounts: []
+      serviceAccountName: {{ include "privacy-pools-relayer.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes: []
+      securityContext:
+        fsGroup: 999
+

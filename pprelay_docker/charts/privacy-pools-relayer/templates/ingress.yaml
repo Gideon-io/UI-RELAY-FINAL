@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "privacy-pools-relayer.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "privacy-pools-relayer.labels" . | nindent 4 }}
+  annotations:
+  {{- if .Values.annotations }}
+    {{- .Values.annotations | toYaml | nindent 4 }}
+  {{- end }}
+  {{- if .Values.ingress.annotations }}
+    {{- .Values.ingress.annotations | toYaml | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName | quote }}
+  rules:
+    - host: {{ .Values.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+                service:
+                    name: {{ include "privacy-pools-relayer.fullname" . }}
+                    port:
+                        name: {{ .Values.service.ports.name }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hostname }}
+      secretName: {{ .Values.ingress.hostname }}-tls

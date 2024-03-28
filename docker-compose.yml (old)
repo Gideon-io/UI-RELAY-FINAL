@@ -5,6 +5,7 @@ services:
   ui-web-app:
     build: ./ppui_docker  
     
+  
   # UI Web App's Nginx (load balancer)
   ui-nginx:
     image: nginx:latest
@@ -17,18 +18,17 @@ services:
   
   # Relayer Service (PP Relay)
   server:
-    image: privacy-pools:relayer
+    build: ./pprelay_docker
     restart: always
-    command: start
-    env_file: ./pprelay_docker/.env
+    command: npm run build:docker
+    env_file: ./pprelay_docker/.env  
     environment:
       REDIS_URL: redis:6379
       nginx_proxy_read_timeout: 600
-    depends_on: [redis]
-    ports:
-      - 8000:8000
-    links:
+    depends_on: 
       - redis
+    ports:
+      - "8000:8000"
 
   # Redis Service for Relayer
   redis:
