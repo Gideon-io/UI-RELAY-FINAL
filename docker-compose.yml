@@ -3,20 +3,25 @@ version: '3'
 services:
   # UI Web App Service
   ui-web-app:
-    build: ./ppui_docker  
+    build: ./ppui_docker 
+    ports:
+      - "3000:3000" 
+    links: 
+      - relayer
     
   # UI Web App's Nginx (load balancer)
   ui-nginx:
     image: nginx:latest
     ports:
       - "8080:80"
+      - "443:443"
     volumes:
       - ./ppui_docker/nginx.conf:/etc/nginx/nginx.conf  
     depends_on:
       - ui-web-app
   
   # Relayer Service (PP Relay)
-  server:
+  relayer:
     image: privacy-pools:relayer
     restart: always
     command: start
@@ -24,35 +29,38 @@ services:
     environment:
       REDIS_URL: redis:6379
       nginx_proxy_read_timeout: 600
+      GENERATE_SOURCEMAP: false
     depends_on: [redis]
     ports:
       - 8000:8000
     links:
       - redis
+    
 
   # Redis Service for Relayer
   redis:
     image: redis
     restart: always
     command: ["redis-server", "--appendonly", "yes"]
+    ports: ['6379:6379']
     volumes:
       - redis:/data
 
   # Relayer's Nginx
-  relayer-nginx:
-    image: nginx:alpine
-    container_name: nginx-relayer
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - conf:/etc/nginx/conf.d
-      - vhost:/etc/nginx/vhost.d
-      - html:/usr/share/nginx/html
-      - certs:/etc/nginx/certs:ro
-    logging:
-      driver: none
+  #relayer-nginx:
+  #  image: nginx:alpine
+  #  container_name: nginx-relayer
+  #  restart: always
+  #  ports:
+  #    - "80:80"
+  #    - "443:443"
+  #  volumes:
+  #    - conf:/etc/nginx/conf.d
+  #    - vhost:/etc/nginx/vhost.d
+  #    - html:/usr/share/nginx/html
+  #    - certs:/etc/nginx/certs:ro
+    #logging:
+      #driver: none
 
   dockergen:
     image: poma/docker-gen

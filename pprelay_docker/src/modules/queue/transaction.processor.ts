@@ -1,5 +1,5 @@
 import { BigNumber } from 'ethers';
-import { TxManager } from '@tornado/tx-manager';
+import { TxManager } from 'tx-manager';
 import { Job, Queue, DoneCallback } from 'bull';
 
 import { Injectable } from '@nestjs/common';
@@ -16,6 +16,16 @@ const PinataClient = require('@pinata/sdk');
 import txManagerConfig from '@/config/txManager.config';
 
 import { BaseProcessor } from './base.processor';
+
+// @ts-expect-error
+import { poseidon } from 'circomlib'
+
+import publicParams from '../../..//public/public_parameters.json';
+
+// eslint-disable-next-line
+function poseidonHash(items: any[]) {
+  return BigNumber.from(poseidon(items).toString())
+}
 
 @Injectable()
 @Processor('transaction')
@@ -36,13 +46,25 @@ export class TransactionProcessor extends BaseProcessor<Transaction> {
   @Process()
   async processTransactions(job: Job<Transaction>, cb: DoneCallback) {
     try {
-      const { extData, membershipProof } = job.data;
-      console.log('extData:', extData);
-      console.log('membershipProof:', membershipProof);
+      const { args, extData, membershipProof } = job.data;
+      console.log('extData relayer:', extData.relayer);
+      const { rewardAddress } = this.configService.get('base');
+
+      if (extData.relayer != rewardAddress) {
+        throw new Error(SERVICE_ERRORS.INVALID_RELAYER_ADDRESS);
+      }
+      // console.log('extData:', extData);
+      // console.log('membershipProof:', membershipProof);
+
+
       await this.checkFee({ fee: extData.fee, externalAmount: extData.extAmount });
       console.log('check fee done');
-      await this.checkProof(membershipProof);
-      console.log('check proof done');
+
+      //await this.checkProof(membershipProof, args.inputNullifiers);
+      //console.log('check proof done');
+
+
+
       await this.uploadProof(membershipProof, extData);
       console.log('upload proof done');
       const txHash = await this.submitTx(job);
@@ -192,8 +214,52 @@ export class TransactionProcessor extends BaseProcessor<Transaction> {
   }
 
   //TODO: check proof
-  async checkProof(proof: any) {
+  async checkProof(proof: any, nullifiers: string[]) {
     try {
+      const worker = require('nova_scotia_browser');
+      worker.init_panic_hook();
+      let proof_json = JSON.parse(proof);
+      let proof_str = proof_json["proof"];
+
+      const ZERO_LEAF = BigNumber.from('21663839004416932945382355908790599225266501822907911457504978515578255421292')
+      let accInnocentCommitments = [ZERO_LEAF, ZERO_LEAF]
+      const step_in = poseidonHash([proof_json["txRecordsMerkleRoot"], proof_json["allowedTxRecordsMerkleRoot"], poseidonHash(accInnocentCommitments)])
+
+      // TODO: check if txRecordsMerkleRoot is correct
+      // TODO: check if allowedTxRecordsMerkleRoot is from the correct pool
+
+      let start_str = JSON.stringify({ step_in: [step_in.toHexString()] });
+      function bigNumberToBytes(bigNumber: BigNumber): Array<number> {
+        const hexString = bigNumber.toHexString().slice(2).padStart(64, '0');
+        const byteArray = [];
+        for (let i = 0; i < hexString.length; i += 2) {
+          byteArray.push(parseInt(hexString.slice(i, i + 2), 16));
+        }
+        return byteArray.reverse();
+      }
+
+      function isArraysEqual(array1: Array<number>, array2: Array<number>): boolean {
+        if (array1.length !== array2.length) {
+          return false;
+        }
+        for (let i = 0; i < array1.length; i++) {
+          if (array1[i] !== array2[i]) {
+            return false;
+          }
+        }
+        return true;
+      }
+      console.log("verifying compressed proof")
+      let verification = worker.verify_compressed_proof(publicParams, proof_str, start_str);
+      console.log(verification)
+
+      let x = JSON.parse(verification);
+      let expected_output = bigNumberToBytes(poseidonHash(nullifiers));
+      console.log("comparing nullifiers")
+
+      if (!isArraysEqual(x, expected_output)){
+        throw "Membership proofs nullifiers do not match."
+      }
     } catch (err) {
       this.handleError(err);
     }
