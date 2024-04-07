@@ -5,7 +5,7 @@ services:
   ui-web-app:
     build: ./ppui_docker 
     ports:
-      - "3000:3000" 
+      - "3000" #originally "3000:3000", changed to "3000" for scaling
     links: 
       - relayer
     
