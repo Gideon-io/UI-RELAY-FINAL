@@ -16,7 +16,9 @@ services:
       - "8080:80"
       - "443:443"
     volumes:
-      - ./ppui_docker/nginx.conf:/etc/nginx/nginx.conf  
+      - ./ppui_docker/nginx.conf:/etc/nginx/nginx.conf
+      - /etc/nginx/ssl/mysite.crt:/etc/nginx/ssl/mysite.crt #generated a self signed ssl cert locally, attaching the file into docker container
+      - /etc/nginx/ssl/mysite.key:/etc/nginx/ssl/mysite.key #generated a self signed ssl cert locally, attaching the file into docker container
     depends_on:
       - ui-web-app
   
