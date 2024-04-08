@@ -13,7 +13,7 @@ services:
   ui-nginx:
     image: nginx:latest
     ports:
-      - "8080:80"
+      - "80:80" #originally 8080:80
       - "443:443"
     volumes:
       - ./ppui_docker/nginx.conf:/etc/nginx/nginx.conf
