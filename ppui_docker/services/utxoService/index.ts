@@ -192,7 +192,7 @@ class Service implements UtxoService {
       batchesCount = numbers.TWO
     }
 
-    const batches = getBlocksBatches(cachedData.latestBlock, currentBlock, batchesCount).reverse()
+    const batches = getBlocksBatches(cachedData.latestBlock, currentBlock, 10000).reverse()
     const promises = batches.map(
       // eslint-disable-next-line
       (batch, index) => this.fetchUnspentUtxoBatch({ batch, index, keypair, callback, decryptedEvents: cachedData.decryptedEvents })

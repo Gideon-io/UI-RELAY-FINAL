@@ -80,8 +80,8 @@ class Service implements CommitmentsService {
     if (interval <= numbers.MIN_BLOCKS_INTERVAL_LINE) {
       batchesCount = numbers.TWO
     }
-
-    const batches = getBlocksBatches(latestBlock, currentBlock, batchesCount).reverse()
+    // setting batchSize to 10000 to play well with public RPC endpoints
+    const batches = getBlocksBatches(latestBlock, currentBlock, 10000).reverse()
 
     const promises = batches.map(
       // eslint-disable-next-line
