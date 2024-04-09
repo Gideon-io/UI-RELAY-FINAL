@@ -158,7 +158,7 @@ const getNullifierEvents = async (cachedNullifiers, withCache = true) => {
     const nullifiers = []
     let from = blockFrom
     while (from < currentBlock) {
-      const maxRange = 10000 // block range should be limited upto 10,000 blocks
+      let maxRange = 10000 // block range should be limited upto 10,000 blocks
       if (from + maxRange > blockFrom) {
         maxRange = blockFrom - from
       }
