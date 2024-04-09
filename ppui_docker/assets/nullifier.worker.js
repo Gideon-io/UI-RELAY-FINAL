@@ -121,11 +121,10 @@ const getCachedEvents = async () => {
   return { blockFrom, cachedEvents }
 }
 
-const getNullifiers = async (blockFrom) => {
+const getNullifiers = async (fromBlock, toBlock) => {
   try {
     const filter = self.poolContract.filters.NewNullifier()
-    const events = await self.poolContract.queryFilter(filter, blockFrom)
-
+    const events = await self.poolContract.queryFilter(filter, blockFrom, toBlock)
     return events.map(({ blockNumber, transactionHash, args }) => ({
       blockNumber,
       transactionHash,
@@ -144,7 +143,6 @@ const getNullifierEvents = async (cachedNullifiers, withCache = true) => {
       const [latestEvent] = cachedNullifiers.sort((a, b) => b.blockNumber - a.blockNumber)
       const currentBlock = await self.poolContract.provider.getBlockNumber()
       const newBlockFrom = Number(latestEvent.blockNumber) + numbers.ONE
-
       if (latestEvent.blockNumber === currentBlock) {
         cached.blockFrom = numbers.DEPLOYED_BLOCK
       }
@@ -154,9 +152,22 @@ const getNullifierEvents = async (cachedNullifiers, withCache = true) => {
       cached = await getCachedEvents()
     }
     const { blockFrom = numbers.DEPLOYED_BLOCK, cachedEvents = [] } = cached
-
-    const nullifiers = await getNullifiers(blockFrom)
-
+    // batch the query to avoid the rate limit
+    const distance = currentBlock - blockFrom
+    const nullifiers = []
+    let from = blockFrom
+    while (from < blockFrom) {
+      const maxRange = 10000 // block range should be limited upto 10,000 blocks
+      if (from + maxRange > blockFrom) {
+        maxRange = blockFrom - from
+      }
+      const events = await getNullifiers(from, from + maxRange)
+      if (events.length === 0) {
+        break
+      }
+      nullifiers.push(...events)
+      from = events[events.length - 1].blockNumber + 1
+    }
     if (nullifiers.length) {
       saveEvents({ events: nullifiers })
     }
