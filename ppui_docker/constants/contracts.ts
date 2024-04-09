@@ -52,7 +52,7 @@ export const FALLBACK_RPC_LIST: { [chainId in ChainId]: string[] } = {
   //   'https://rpc.gnosis.gateway.fm',
   // ],
   [ChainId.ETHEREUM_SEPOLIA]: [
-    'https://rpc.sepolia.org'
+    'https://1rpc.io/sepolia'
   ]
 }
 
