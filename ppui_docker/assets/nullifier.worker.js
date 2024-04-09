@@ -124,7 +124,7 @@ const getCachedEvents = async () => {
 const getNullifiers = async (fromBlock, toBlock) => {
   try {
     const filter = self.poolContract.filters.NewNullifier()
-    const events = await self.poolContract.queryFilter(filter, blockFrom, toBlock)
+    const events = await self.poolContract.queryFilter(filter, fromBlock, toBlock)
     return events.map(({ blockNumber, transactionHash, args }) => ({
       blockNumber,
       transactionHash,
