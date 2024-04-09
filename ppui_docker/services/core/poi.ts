@@ -16,9 +16,32 @@ function buildTxRecordMerkleTree({ events }: { events: TxRecordEvents }) {
   return new MerkleTree(numbers.TX_RECORDS_MERKLE_TREE_HEIGHT, leaves, { hashFunction: poseidonHash2Wrapper, zeroElement: ZERO_LEAF.toString() })
 }
 
+
+async function findBlindingForNullifier(keypair: Keypair,  trivialNullifier: string, commitment: string, utxo: BaseUtxo) {
+  console.log("Trying to find blinding for nullifier = ", trivialNullifier, " commitment = ", commitment);
+
+  const newBlinding = BigNumber.from(
+    '0x' +
+    ethers.utils.keccak256(ethers.utils.concat([ethers.utils.arrayify(ZERO_LEAF), ethers.utils.arrayify(utxo.blinding)])).slice(2, 64)
+  ).mod(FIELD_SIZE)
+
+  const newUtxo = new Utxo({ amount: BG_ZERO, keypair, blinding: newBlinding, index: 0 })
+  const newNullifier = toFixedHex(newUtxo.getNullifier())
+
+  console.log('newly generated nullifier = ', newNullifier)
+  console.log('trivial nullifier = ', trivialNullifier)
+
+  if (newNullifier != trivialNullifier) {
+    throw new Error('Please erase your cache and refresh this page...')
+  }
+
+  return {newUtxo, newNullifier}
+}
+
 async function buildMappings(keypair: Keypair, commitmentEvents: CommitmentEvents, txRecordEvents: TxRecordEvents) {
   const commitmentToUtxo = new Map<string, BaseUtxo>()
   const nullifierToUtxo = new Map<string, BaseUtxo>()
+
   for (const event of commitmentEvents) {
     let decryptedUtxo = null
     try {
@@ -32,38 +55,30 @@ async function buildMappings(keypair: Keypair, commitmentEvents: CommitmentEvent
   }
 
   for (const event of txRecordEvents) {
-    function findBlindingForNullifier(trivialNullifier: string, commitment: string) {
-      trivialNullifier = toFixedHex(trivialNullifier)
-      commitment = toFixedHex(commitment)
-      console.log("Trying to find blinding for nullifier = ", trivialNullifier, " commitment = ", commitment);
+    let NulCommitPair: string[][] = [[event.inputNullifier1, event.outputCommitment1], [event.inputNullifier2, event.outputCommitment2]]
+    for (let i = 0; i < 2; i++) {
+      let inputNullifier = toFixedHex(NulCommitPair[i][0])
+      let outputCommitment = toFixedHex(NulCommitPair[i][1])
 
-      if (!commitmentToUtxo.has(commitment)) {
-        console.log("Apparently we don't have commitment = ", commitment, " in commitmentToUtxo");
-        return
+      if (nullifierToUtxo.has(inputNullifier)) {
+        console.log("Known nullifier : " + inputNullifier);
+        continue
       }
-      if (nullifierToUtxo.has(trivialNullifier)) {
-        console.log("Apparently we already have nullifier = ", trivialNullifier, " in nullifierToUtxo");
-        return
-      }
-      const utxo = commitmentToUtxo.get(commitment)
+
+      const utxo = commitmentToUtxo.get(outputCommitment)
       if (!utxo) {
-        throw new Error('Please erase your cache and refresh this page.')
+        console.log("Unkown commitment : " + outputCommitment);
+        continue
       }
-      const newBlinding = BigNumber.from(
-        '0x' +
-        ethers.utils.keccak256(ethers.utils.concat([ethers.utils.arrayify(ZERO_LEAF), ethers.utils.arrayify(utxo.blinding)])).slice(2, 64)
-      ).mod(FIELD_SIZE)
-
-      const newUtxo = new Utxo({ amount: BG_ZERO, keypair, blinding: newBlinding, index: 0 })
-      nullifierToUtxo.set(toFixedHex(newUtxo.getNullifier()), newUtxo)
-      console.log('newly generated nullifier = ', toFixedHex(newUtxo.getNullifier()))
-      console.log('trivial nullifier = ', trivialNullifier)
-      if (toFixedHex(newUtxo.getNullifier()) != trivialNullifier) {
-        throw new Error('Please erase your cache and refresh this page...')
+      
+      try {
+        const { newUtxo, newNullifier } = await findBlindingForNullifier(keypair, inputNullifier, outputCommitment, utxo) 
+        nullifierToUtxo.set(newNullifier, newUtxo)
+      } catch (e) {
+        console.log("Error finding blinding for inputNullifier: " + inputNullifier, " and outputCommitment: " + outputCommitment);
+        continue
       }
-    }
-    findBlindingForNullifier(event.inputNullifier1, event.outputCommitment1)
-    findBlindingForNullifier(event.inputNullifier2, event.outputCommitment2)
+   }
   }
 
   return { nullifierToUtxo, commitmentToUtxo }

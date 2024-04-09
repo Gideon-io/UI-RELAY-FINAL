@@ -158,16 +158,16 @@ const getNullifierEvents = async (cachedNullifiers, withCache = true) => {
     const nullifiers = []
     let from = blockFrom
     while (from < currentBlock) {
-      let maxRange = 10000 // block range should be limited upto 10,000 blocks
-      if (from + maxRange > blockFrom) {
-        maxRange = blockFrom - from
+      let windowSize = numbers.MAX_RPC_BLOCK_RANGE // block range to fit RPC Limit
+      if (from + windowSize > currentBlock) {
+        windowSize = currentBlock - from
       }
-      const events = await getNullifiers(from, from + maxRange)
-      if (events.length === 0) {
-        break
+      let to = from + windowSize
+      const events = await getNullifiers(from, to)
+      if (events.length) {
+        nullifiers.push(...events)
       }
-      nullifiers.push(...events)
-      from = events[events.length - 1].blockNumber + 1
+      from = to
     }
     if (nullifiers.length) {
       saveEvents({ events: nullifiers })

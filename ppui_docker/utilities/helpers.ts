@@ -9,11 +9,8 @@ export function getBatches<T>(array: T[], batchSize: number) {
   return batches
 }
 
-export function getBlocksBatches(fromBlock: number, toBlock: number, batchSize: number): Array<[number, number]> {
-  const interval = toBlock - fromBlock // < 200000
-
-  // set block batch to 10000 so public RPC's are not overloaded
-  const numOfBatches = Math.ceil(interval / batchSize)
+export function getBlocksBatches(fromBlock: number, toBlock: number, numOfBatches: number): Array<[number, number]> {
+  const batchSize  = Math.ceil((toBlock - fromBlock) / numOfBatches)
 
   return Array.from({ length: numOfBatches}, (_, index) => {
     const from = fromBlock + batchSize * index

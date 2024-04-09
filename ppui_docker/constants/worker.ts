@@ -36,6 +36,7 @@ const numbers = {
   DECRYPT_WORKERS_COUNT: 8,
   MIN_BLOCKS_INTERVAL_LINE: 200000,
   EPHEM_PUBLIC_KEY_BUF_LENGTH: 56,
+  MAX_RPC_BLOCK_RANGE: 10000,
 }
 
 export { workerEvents, numbers }

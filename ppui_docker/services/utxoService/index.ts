@@ -92,7 +92,7 @@ class Service implements UtxoService {
 
       return batchEvents
     } catch (err) {
-      throw new Error(`getFreshData error: ${err}`)
+      throw new Error(`getBatchEvents error: ${err} blockFrom: ${blockFrom} blockTo: ${blockTo} index: ${index}`)
     }
   }
 
@@ -187,31 +187,56 @@ class Service implements UtxoService {
     const currentBlock = await this.poolContract.provider.getBlockNumber()
     const interval = currentBlock - cachedData.latestBlock
 
-    let batchesCount = workerProvider.eventsWorkers.length
+    // calculate how many batches we need to fetch based on RPC limitations
+    let totalNoOfBatches = Math.ceil(interval / numbers.MAX_RPC_BLOCK_RANGE)
+    const allBatches = getBlocksBatches(cachedData.latestBlock, currentBlock, totalNoOfBatches).reverse()
+
+  
+    // limit the number of concurrent batches to the number of workers
+    let noOfWorkers = workerProvider.eventsWorkers.length
     if (interval <= numbers.MIN_BLOCKS_INTERVAL_LINE) {
-      batchesCount = numbers.TWO
+      noOfWorkers = numbers.TWO
     }
 
-    const batches = getBlocksBatches(cachedData.latestBlock, currentBlock, 10000).reverse()
-    const promises = batches.map(
-      // eslint-disable-next-line
-      (batch, index) => this.fetchUnspentUtxoBatch({ batch, index, keypair, callback, decryptedEvents: cachedData.decryptedEvents })
-    )
+    console.log("servies/utxoService/index.ts: getFreshUnspentUtxo: totalNoOfBatches: ", totalNoOfBatches, " noOfWorkers : ", noOfWorkers)
 
-    const freshBatchesData = await Promise.all(promises)
-    console.log("servies/utxoService/index.ts: getFreshUnspentUtxo: freshBatchesData", freshBatchesData)
 
-    workerProvider.openEventsChannel<{ storeName: string; data: CommitmentEvents }, null>(workerEvents.SAVE_EVENTS, {
-      storeName: 'commitment_events_100',
-      data: freshBatchesData.map((el) => el.commitments).flat(),
-    })
+        
+    let i = 0
+    const aggData = []
+    while (i < totalNoOfBatches - 1) {  
+     
+      let noOfBatches = noOfWorkers
+      if (totalNoOfBatches - i < noOfWorkers) {
+        noOfBatches = totalNoOfBatches - i
+      }
 
-    workerProvider.openEventsChannel<{ storeName: string; data: DecryptedHashes }, null>(workerEvents.SAVE_EVENTS, {
-      storeName: 'decrypted_events_100',
-      data: freshBatchesData.map((el) => el.decryptedHashes).flat(),
-    })
+      const promises = allBatches.slice(i, i + noOfBatches).map(
+        // eslint-disable-next-line
+        (batch, index) => this.fetchUnspentUtxoBatch({ batch, index, keypair, callback, decryptedEvents: cachedData.decryptedEvents })
+      )
 
-    return { freshBatchesData, lastBlock: currentBlock }
+      console.log("servies/utxoService/index.ts: getFreshUnspentUtxo: i: ", i, " batchCount: ", noOfBatches)
+
+      const dataBatch = await Promise.all(promises)
+      console.log("servies/utxoService/index.ts: getFreshUnspentUtxo: batchData", dataBatch)
+  
+      workerProvider.openEventsChannel<{ storeName: string; data: CommitmentEvents }, null>(workerEvents.SAVE_EVENTS, {
+        storeName: 'commitment_events_100',
+        data: dataBatch.map((el) => el.commitments).flat(),
+      })
+  
+      workerProvider.openEventsChannel<{ storeName: string; data: DecryptedHashes }, null>(workerEvents.SAVE_EVENTS, {
+        storeName: 'decrypted_events_100',
+        data: dataBatch.map((el) => el.decryptedHashes).flat(),
+      })
+
+      aggData.push(...dataBatch)
+
+      i += noOfBatches
+    }
+
+    return { aggData, lastBlock: currentBlock }
   }
 
   public async fetchUnspentUtxo({ keypair, callbacks }: GetUtxoPayload): Promise<FetchUnspentUtxoRes> {
@@ -251,10 +276,9 @@ class Service implements UtxoService {
 
       console.log("servies/utxoService/index.ts: fetchData: cachedData", cachedData)
 
-      const { freshBatchesData, lastBlock } = await this.getFreshUnspentUtxo({ keypair, cachedData, callback: callbacks.update })
+      const { aggData, lastBlock } = await this.getFreshUnspentUtxo({ keypair, cachedData, callback: callbacks.update })
 
-      console.log("servies/utxoService/index.ts: fetchData: freshBatchesData", freshBatchesData)
-      console.log("servies/utxoService/index.ts: fetchData: lastBlock", lastBlock)
+      console.log("servies/utxoService/index.ts: fetchData: lastBlock", lastBlock, " aggData: ", aggData)
 
       const accumulator = {
         totalAmount: cachedData.totalAmount,
@@ -263,7 +287,7 @@ class Service implements UtxoService {
         commitments: [],
         decryptedHashes: [],
       }
-      const freshData = freshBatchesData.reduce(this.compileData, accumulator)
+      const freshData = aggData.reduce(this.compileData, accumulator)
       if (lastBlock) {
         await workerProvider.openEventsChannel<{ lastSyncBlock: number }, null>(workerEvents.SAVE_LAST_SYNC_BLOCK, {
           lastSyncBlock: lastBlock,

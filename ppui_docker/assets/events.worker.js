@@ -72,9 +72,11 @@ const setTornadoPool = (chainId, provider) => {
   self.poolContract = TornadoPoolFactory.connect(POOL_CONTRACT[chainId], provider)
 }
 
-const getCommitmentBatch = async ({ blockFrom, blockTo, cachedEvents, withCache }) => {
+const getCommitmentBatch = async (fromBlock, toBlock, cachedEvents, withCache) => {
+  console.log('getCommitmentBatch: fromBlock ', fromBlock, 'toBlock ', toBlock)
+
   const filter = self.poolContract.filters.NewCommitment()
-  const events = await self.poolContract.queryFilter(filter, blockFrom, blockTo)
+  const events = await self.poolContract.queryFilter(filter, fromBlock, toBlock)
 
   const commitmentEvents = events.map(({ blockNumber, transactionHash, args }) => ({
     blockNumber,
@@ -94,9 +96,11 @@ const getCommitmentBatch = async ({ blockFrom, blockTo, cachedEvents, withCache 
   })
 }
 
-const getTxRecordsBatch = async ({ blockFrom, blockTo, cachedEvents, withCache }) => {
+const getTxRecordsBatch = async (fromBlock, toBlock, cachedEvents, withCache) => {
+  console.log('getTxRecordsBatch: fromBlock ', fromBlock, 'toBlock ', toBlock)
+
   const filter = self.poolContract.filters.NewTxRecord()
-  const events = await self.poolContract.queryFilter(filter, blockFrom, blockTo)
+  const events = await self.poolContract.queryFilter(filter, fromBlock, toBlock)
 
   const txRecordEvents = events.map(({ blockNumber, transactionHash, args }) => ({
     blockNumber,
@@ -139,17 +143,41 @@ const getTxRecords = async ({ withCache, lastSyncBlock }) => {
       lastSyncBlock = await getTxRecordsLastSyncBlock()
     }
     const currentBlock = await self.poolContract.provider.getBlockNumber()
+    let blockTo = currentBlock
 
     if (lastSyncBlock && cachedEvents.length) {
       const newBlockFrom = Number(lastSyncBlock) + numbers.ONE
+      blockFrom = newBlockFrom
 
       if (Number(lastSyncBlock) === currentBlock) {
         return { txRecordEvents: cachedEvents }
       }
-      blockFrom = newBlockFrom > currentBlock ? currentBlock : newBlockFrom
+      if (newBlockFrom > currentBlock) {
+        blockTo = newBlockFrom
+        blockFrom = currentBlock
+      }
     }
 
-    const txRecordEvents = await getTxRecordsBatch({ blockFrom, blockTo: currentBlock, cachedEvents, withCache })
+    // batch the query to meet RPC Limit
+    const txRecordEvents = []
+    let from = blockFrom
+
+    while (from < blockTo) {
+      let windowSize = numbers.MAX_RPC_BLOCK_RANGE // block range to fit RPC Limit
+      if (from + windowSize >= blockTo) {
+        windowSize = blockTo - from
+      }
+      let to = from + windowSize
+
+      console.log('getTxRecords: blockFrom ', blockFrom, 'blockTo ', blockTo, ' from: ', from, ' to: ', to, ' windowSize: ', windowSize)
+
+      const events = await getTxRecordsBatch(from, to, cachedEvents, withCache)
+      if (events.length) {
+        txRecordEvents.push(...events)
+      }
+
+      from = to
+    }
 
     return {
       newTxRecordsEvents: txRecordEvents,
@@ -180,17 +208,41 @@ const getCommitments = async ({ withCache, lastSyncBlock }) => {
       lastSyncBlock = await getLastSyncBlock()
     }
     const currentBlock = await self.poolContract.provider.getBlockNumber()
+    let blockTo = currentBlock
 
     if (lastSyncBlock && cachedEvents.length) {
       const newBlockFrom = Number(lastSyncBlock) + numbers.ONE
+      blockFrom = newBlockFrom
 
       if (Number(lastSyncBlock) === currentBlock) {
         return { commitmentEvents: cachedEvents }
       }
-      blockFrom = newBlockFrom > currentBlock ? currentBlock : newBlockFrom
+
+      if (newBlockFrom > currentBlock) {
+        blockTo = newBlockFrom
+        blockFrom = currentBlock
+      }
     }
 
-    const commitmentEvents = await getCommitmentBatch({ blockFrom, blockTo: currentBlock, cachedEvents, withCache })
+    // batch the query to meet RPC Limit
+    const commitmentEvents = []
+    let from = blockFrom
+
+    while (from < blockTo) {
+      let windowSize = numbers.MAX_RPC_BLOCK_RANGE // block range to fit RPC Limit
+      if (from + windowSize >= blockTo) {
+        windowSize = blockTo - from
+      }
+      let to = from + windowSize
+
+      console.log('getTxRecords: blockFrom ', blockFrom, 'blockTo ', blockTo, ' from: ', from, ' to: ', to, ' windowSize: ', windowSize)
+
+      const events = await getCommitmentBatch(from, to, cachedEvents, withCache)
+      if (events.length) {
+        commitmentEvents.push(...events)
+      }
+      from = to
+    }
 
     return {
       newCommitmentEvents: commitmentEvents,
@@ -302,7 +354,7 @@ const getTxRecordEvents = async ({ publicKey, lastSyncBlock, withCache = true },
 
 const getBatchCommitmentsEvents = async ({ blockFrom, blockTo, publicKey, privateKey, cachedEvents, withCache = true }, [port]) => {
   try {
-    const commitments = await getCommitmentBatch({ blockFrom, blockTo, publicKey, cachedEvents, withCache })
+    const commitments = await getCommitmentBatch(blockFrom, blockTo, publicKey, cachedEvents, withCache)
 
     port.postMessage({ result: commitments })
     saveEvents({ events: commitments, storeName: 'commitment_events_100' })
@@ -313,7 +365,7 @@ const getBatchCommitmentsEvents = async ({ blockFrom, blockTo, publicKey, privat
 
 const getBatchEvents = async ({ blockFrom, blockTo, publicKey, privateKey, cachedEvents, withCache = true }, [port]) => {
   try {
-    const commitments = await getCommitmentBatch({ blockFrom, blockTo, publicKey, cachedEvents, withCache })
+    const commitments = await getCommitmentBatch(blockFrom, blockTo, publicKey, cachedEvents, withCache)
     const { decrypted, commitments: userCommitments } = decryptCommitmentEvents({
       publicKey,
       privateKey,

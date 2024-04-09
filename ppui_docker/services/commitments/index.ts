@@ -48,7 +48,7 @@ class Service implements CommitmentsService {
 
       return batchEvents
     } catch (err) {
-      throw new Error(`getFreshData error: ${err}`)
+      throw new Error(`getBatchEvents error: ${err} blockFrom: ${blockFrom} blockTo: ${blockTo} index: ${index}`)
     }
   }
 
@@ -76,20 +76,45 @@ class Service implements CommitmentsService {
     const currentBlock = await this.poolContract.provider.getBlockNumber()
     const interval = currentBlock - latestBlock
 
-    let batchesCount = workerProvider.eventsWorkers.length
+    // calculate how many batches we need to fetch based on RPC limitations
+    let totalNoOfBatches = Math.ceil(interval / numbers.MAX_RPC_BLOCK_RANGE)
+    const allBatches = getBlocksBatches(latestBlock, currentBlock, totalNoOfBatches).reverse()
+   
+    // limit the number of concurrent batches to the number of workers
+    let noOfWorkers = workerProvider.eventsWorkers.length
     if (interval <= numbers.MIN_BLOCKS_INTERVAL_LINE) {
-      batchesCount = numbers.TWO
+      noOfWorkers = numbers.TWO
     }
-    // setting batchSize to 10000 to play well with public RPC endpoints
-    const batches = getBlocksBatches(latestBlock, currentBlock, 10000).reverse()
 
-    const promises = batches.map(
-      // eslint-disable-next-line
-      (batch, index) => this.fetchCommitmentsBatch({ batch, index, keypair, cachedEvents: commitments })
-    )
+    let maxNoOfBatches = workerProvider.eventsWorkers.length
+    if (interval <= numbers.MIN_BLOCKS_INTERVAL_LINE) {
+      maxNoOfBatches = numbers.TWO
+    }
 
-    const freshCommitments = await Promise.all<CommitmentEvents>(promises)
-    return { freshCommitments: freshCommitments.flat(), lastBlock: currentBlock }
+    console.log("servies/commitments/index.ts: getFreshCommitments: totalNoOfBatches: ", totalNoOfBatches, " noOfWorkers : ", noOfWorkers)
+
+
+    let i = 0
+    const aggData = []
+    while (i < totalNoOfBatches - 1) {  
+
+      let noOfBatches = noOfWorkers
+      if (totalNoOfBatches - i < noOfWorkers) {
+        noOfBatches = totalNoOfBatches - i
+      }
+
+      const promises = allBatches.slice(i, i + noOfBatches).map(
+        // eslint-disable-next-line
+        (batch, index) => this.fetchCommitmentsBatch({ batch, index, keypair, cachedEvents: commitments })
+      )
+
+      const freshCommitments = await Promise.all<CommitmentEvents>(promises)
+      aggData.push(...freshCommitments)
+
+      i += noOfBatches
+    }
+
+    return { freshCommitments: aggData.flat(), lastBlock: currentBlock }
   }
 
   public async getCachedData(keypair: Keypair): Promise<CachedData> {
