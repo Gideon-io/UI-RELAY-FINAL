@@ -13,7 +13,7 @@ RUN yarn && yarn cache clean --force
 ENV GENERATE_SOURCEMAP=false
 ENV NODE_OPTIONS=--max-old-space-size=4096
 
-EXPOSE 8000
+EXPOSE 3001
 
 ENTRYPOINT ["yarn"]
 

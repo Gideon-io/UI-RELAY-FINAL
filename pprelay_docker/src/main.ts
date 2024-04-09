@@ -13,7 +13,12 @@ async function bootstrap() {
       allowedHeaders: 'Content-Type, Accept',
     });
     const configService = app.get(ConfigService);
-    await app.listen(configService.get('base.port'));
+    let port = configService.get('base.port');
+    await app.listen(port);
+
+    console.log('app listening to', port);
+
+
   } catch (err) {
     console.log('err', err.message);
   }
