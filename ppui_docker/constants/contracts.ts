@@ -35,7 +35,7 @@ export const RPC_LIST: { [chainId in ChainId]: string } = {
   // [ChainId.BSC]: 'https://bsc-mainnet.chainnodes.org/d692ae63-0a7e-43e0-9da9-fe4f4cc6c607',
   // [ChainId.MAINNET]: 'https://mainnet.chainnodes.org/d692ae63-0a7e-43e0-9da9-fe4f4cc6c607',
   // [ChainId.XDAI]: 'https://gnosis-mainnet.chainnodes.org/d692ae63-0a7e-43e0-9da9-fe4f4cc6c607',
-  [ChainId.ETHEREUM_SEPOLIA]: 'https://ethereum-sepolia-rpc.publicnode.com'
+  [ChainId.ETHEREUM_SEPOLIA]: 'https://patient-red-daylight.ethereum-sepolia.quiknode.pro/3c4ba943c21b9fe1f4286e830271b68e2967f649/'
 }
 
 export const FALLBACK_RPC_LIST: { [chainId in ChainId]: string[] } = {
@@ -52,7 +52,7 @@ export const FALLBACK_RPC_LIST: { [chainId in ChainId]: string[] } = {
   //   'https://rpc.gnosis.gateway.fm',
   // ],
   [ChainId.ETHEREUM_SEPOLIA]: [
-    'https://1rpc.io/sepolia'
+    'https://patient-red-daylight.ethereum-sepolia.quiknode.pro/3c4ba943c21b9fe1f4286e830271b68e2967f649/'
   ]
 }
 
