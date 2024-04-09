@@ -35,7 +35,7 @@ import { Element } from 'fixed-merkle-tree'
 import { proveInclusion } from './poi'
 import { TxRecord } from './txRecord'
 import { getIPFSCid } from '@/utilities/getIPFSCid'
-import { saveAsFile } from '@/utilities'
+import { downloadJSON } from '@/utilities'
 
 const ADDRESS_BYTES_LENGTH = 20
 
@@ -461,7 +461,7 @@ async function createMembershipProof(params: CreateTransactionParams, membership
     logger('Downloading membership proof.', LogLevel.LOADING)
     const membershipProofURI = await getIPFSCid(membershipProof)
 
-    saveAsFile(membershipProof, 'membership_proof_save_to_ipfs_if_you_dont_trust_relayers_pinning_service.txt')
+    downloadJSON(membershipProof, 'membership_proof.json')
 
     return { membershipProof, membershipProofURI, secondOutputBlinding:params.outputs[1].blinding }
   } catch (err) {
